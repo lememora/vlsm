@@ -6,6 +6,7 @@ package main
 import (
   "fmt"
   "log"
+  "math"
   "net"
   "sort"
   "strconv"
@@ -141,40 +142,49 @@ func enterSubnetParams(p *SubnetParams, counter int) {
   }
 }
 
-// func calcSubnet(network *net.IPNet) *Subnet {
-//   return nil
-// }
-
 func main() {
   networkParams := NetworkParams{"192.168.1.0/24", uint32(5)} // test
   // networkParams := NetworkParams{} // empty
 
   network := enterNetwork(networkParams)
+  
+  /* Calculate number of host bits available for the given network */
+  ones, bits := network.Mask.Size()
+  availableHostBits := bits - ones
+
   numberOfSubnets := int(enterNumberOfSubnets(networkParams))
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
   subnetParams := []SubnetParams{ // test
-    SubnetParams{500,  1},
-    SubnetParams{1500, 1},
-    SubnetParams{100,  1},
-    SubnetParams{50,   1},
-    SubnetParams{300,  1},
+    SubnetParams{50,  1},
+    SubnetParams{150, 1},
+    SubnetParams{10,  1},
+    SubnetParams{5,   1},
+    SubnetParams{30,  1},
   }
 
   for i:= 0; i < numberOfSubnets; i++ {
     enterSubnetParams(&subnetParams[i], i)
   }
   sort.Sort(SubnetParamsSort(subnetParams))
-  
-  
+
+  /* Calculate number of host bits necessary based on the biggest subnet */
+  requiredHostBits := int(math.Ceil(math.Log2(float64(subnetParams[0].size))))
+  availableSubnetBits := availableHostBits - requiredHostBits
+  if availableSubnetBits < 0 {
+    log.Fatal(fmt.Errorf("Network not big enough"))
+  }
   
   // subnets := make([]Subnet, 0)
   
   
-  fmt.Println(network)
-  fmt.Println(network.Mask)
-  fmt.Println(len(network.Mask))
-  fmt.Println(numberOfSubnets)
-  fmt.Println(subnetParams)
+  fmt.Println("=== DEBUG >>>")
+  fmt.Printf("network = %v\n", network)
+  fmt.Printf("network.Mask = %v\n", network.Mask)
+  fmt.Printf("availableHostBits = %v\n", availableHostBits)
+  fmt.Printf("numberOfSubnets = %v\n", numberOfSubnets)
+  fmt.Printf("subnetParams = %v\n", subnetParams)
+  fmt.Printf("requiredHostBits = %v\n", requiredHostBits)
+  fmt.Println("<<< DEBUG ===")
   // fmt.Println(subnets)
 }
