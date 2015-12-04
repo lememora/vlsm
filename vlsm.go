@@ -12,6 +12,10 @@ import (
 
 type Subnet struct {
   network net.IPNet
+  mask net.IP
+  broadcast net.IP
+  poolSize int
+  poolRange [2]net.IP
 }
 
 type SubnetParams struct {
@@ -114,6 +118,10 @@ func enterSubnetParams(counter int) *SubnetParams {
     enterSubnetSize(counter),
     enterSubnetDistribution(counter),
   }
+}
+
+func calcSubnet(network *net.IPNet) *Subnet {
+  return nil
 }
 
 func main() {
