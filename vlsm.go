@@ -7,133 +7,174 @@ import (
   "fmt"
   "log"
   "net"
+  "sort"
   "strconv"
 )
+
+type NetworkParams struct {
+  networkAddress string
+  numberOfSubnets uint32
+}
 
 type Subnet struct {
   network net.IPNet
   mask net.IP
   broadcast net.IP
-  poolSize int
+  poolSize uint32
   poolRange [2]net.IP
 }
 
 type SubnetParams struct {
-  size, distribution int
+  size uint32
+  distribution byte
 }
 
-func enterNetwork() *net.IPNet {
-  var arg, defaultArg string
-  defaultArg = "192.168.0.0/16" /* default class C */
-  fmt.Printf("Enter IPv4 network address in CIDR format (%s): ", defaultArg)
-	n, err := fmt.Scanln(&arg)
-  if n == 0 {
-    arg = defaultArg
-  } else if err != nil {
-    log.Fatal(fmt.Errorf("%s\n", err))
+type SubnetParamsSort []SubnetParams
+
+func (s SubnetParamsSort) Len() int {
+  return len(s)
+}
+
+func (s SubnetParamsSort) Swap(i, j int) {
+  s[i], s[j] = s[j], s[i]
+}
+
+func (s SubnetParamsSort) Less(i, j int) bool {
+  return s[i].size > s[j].size
+}
+
+func enterNetwork(p NetworkParams) *net.IPNet {
+  if len(p.networkAddress) == 0 {
+    argDefault := "192.168.0.0/16" /* default class C */
+    fmt.Printf("Enter IPv4 network address in CIDR format (%s): ", argDefault)
+  	n, err := fmt.Scanln(&p.networkAddress)
+    if n == 0 {
+      p.networkAddress = argDefault
+    } else if err != nil {
+      log.Fatal(fmt.Errorf("%s\n", err))
+    }
   }
 
-  ip, net, err := net.ParseCIDR(arg)
+  ip, net, err := net.ParseCIDR(p.networkAddress)
   if err != nil {
-    log.Fatal(fmt.Errorf("ParseCIDR(%q) = %v, %v", arg, ip, net))
+    log.Fatal(fmt.Errorf("ParseCIDR(%q) = %v, %v", p.networkAddress, ip, net))
   }
 
   return net
 }
 
-func enterNumOfSubnets() int {
-  var arg, defaultArg string
-  defaultArg = "1"
-  fmt.Printf("Enter the number of subnets (%s): ", defaultArg)
+func enterNumberOfSubnets(p NetworkParams) uint32 {
+  if p.numberOfSubnets == 0 {
+    var arg string
+    argDefault := "1"
+    fmt.Printf("Enter the number of subnets (%s): ", argDefault)
+    n, err := fmt.Scanln(&arg)
+    if n == 0 {
+      arg = argDefault
+    } else if err != nil {
+      log.Fatal(fmt.Errorf("%s\n", err))
+    }
+
+    n, err  = strconv.Atoi(arg)
+    if err != nil {
+      log.Fatal(fmt.Errorf("Atoi(%q) = %v", arg, n))
+    }
+
+    p.numberOfSubnets = uint32(n)    
+  }
+
+  if !(p.numberOfSubnets >= 1 && p.numberOfSubnets <= 2147483648) {
+    log.Fatal(fmt.Errorf("Invalid number of subnets = %d", p.numberOfSubnets))
+  }
+
+  return p.numberOfSubnets
+}
+
+func enterSubnetSize(p *SubnetParams) {
+  var arg string
+  argDefault := "2"
+  fmt.Printf("Enter subnet size (%s): ", argDefault)
   n, err := fmt.Scanln(&arg)
   if n == 0 {
-    arg = defaultArg
+    arg = argDefault
   } else if err != nil {
     log.Fatal(fmt.Errorf("%s\n", err))
   }
 
-  var numOfSubnets int
-  numOfSubnets, err = strconv.Atoi(arg)
+  n, err  = strconv.Atoi(arg)
   if err != nil {
-    log.Fatal(fmt.Errorf("Atoi(%q) = %v", arg, numOfSubnets))
-  }
-  if !(numOfSubnets >= 1 && numOfSubnets <= 4194304) {
-    log.Fatal(fmt.Errorf("Invalid number of subnets = %d", numOfSubnets))
+    log.Fatal(fmt.Errorf("Atoi(%q) = %v", arg, n))
   }
 
-  return numOfSubnets
+  p.size = uint32(n)
 }
 
-func enterSubnetSize(counter int) int {
-  var arg, defaultArg string
-  defaultArg = "2"
-  fmt.Printf("Enter subnet %d size (%s): ", counter, defaultArg)
-  n, err := fmt.Scanln(&arg)
-  if n == 0 {
-    arg = defaultArg
-  } else if err != nil {
-    log.Fatal(fmt.Errorf("%s\n", err))
-  }
-
-  var subnetSize int
-  subnetSize, err = strconv.Atoi(arg)
-  if err != nil {
-    log.Fatal(fmt.Errorf("Atoi(%q) = %v", arg, subnetSize))
-  }
-  if !(subnetSize >= 2 && subnetSize <= 16777214) {
-    log.Fatal(fmt.Errorf("Invalid subnet %d size = %d", counter, subnetSize))
-  }
-
-  return subnetSize
+func enterSubnetDistribution(p *SubnetParams) {
+  p.distribution = byte(1) /* stub */
+  // TODO: parse distribution
+  // // distributionChoices := [3]string {"minimum","maximum","balanced"}
+  // // contains(distributionChoices, arg)
+  // var arg string
+  // argDefault := "minimum"
+  // fmt.Printf("Enter subnet distribution [minimum|maximum|balanced] (%s): ", argDefault)
+  // n, err := fmt.Scanln(&arg)
+  // if n == 0 {
+  //   arg = argDefault
+  // } else if err != nil {
+  //   log.Fatal(fmt.Errorf("%s\n", err))
+  // }
 }
 
-func enterSubnetDistribution(counter int) int {
-  // distributionChoices := [3]string {"minimum","maximum","balanced"}
-  // contains(distributionChoices, arg)
-  var arg, defaultArg string
-  defaultArg = "minimum"
-  fmt.Printf("Enter subnet %d distribution [minimum|maximum|balanced] (%s): ", counter, defaultArg)
-  n, err := fmt.Scanln(&arg)
-  if n == 0 {
-    // arg = defaultArg
-    arg = "1" // TODO
-  } else if err != nil {
-    log.Fatal(fmt.Errorf("%s\n", err))
+func enterSubnetParams(p *SubnetParams, counter int) {
+  if p.size == 0 {
+    fmt.Printf("=== Subnet #%d ===\n", counter + 1)
+    enterSubnetSize(p)    
   }
-
-  var distribution int
-  distribution, err = strconv.Atoi(arg)
-  if err != nil {
-    log.Fatal(fmt.Errorf("Atoi(%q) = %v", arg, distribution))
+  if !(p.size >= 1 && p.size <= 2147483646) {
+    log.Fatal(fmt.Errorf("Invalid subnet size = %d", p.size))
   }
-  if !(distribution >= 1 && distribution <= 3) {
-    log.Fatal(fmt.Errorf("Invalid subnet %d distribution = %d", counter, distribution))
+  if p.distribution == 0 {
+    enterSubnetDistribution(p)    
   }
-
-  return distribution
-}
-
-func enterSubnetParams(counter int) *SubnetParams {
-  return &SubnetParams{
-    enterSubnetSize(counter),
-    enterSubnetDistribution(counter),
+  if !(p.distribution >= 1 && p.distribution <= 3) {
+    log.Fatal(fmt.Errorf("Invalid subnet distribution = %d", p.distribution))
   }
 }
 
-func calcSubnet(network *net.IPNet) *Subnet {
-  return nil
-}
+// func calcSubnet(network *net.IPNet) *Subnet {
+//   return nil
+// }
 
 func main() {
-  network := enterNetwork()
-  numOfSubnets := enterNumOfSubnets()
+  networkParams := NetworkParams{"192.168.1.0/24", uint32(5)} // test
+  // networkParams := NetworkParams{} // empty
 
-  subnetParams := make([]SubnetParams, 0)
-  for i:= 1; i <= numOfSubnets; i++ {
-    subnetParams = append(subnetParams, *enterSubnetParams(i))
+  network := enterNetwork(networkParams)
+  numberOfSubnets := int(enterNumberOfSubnets(networkParams))
+
+  // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
+  subnetParams := []SubnetParams{ // test
+    SubnetParams{500,  1},
+    SubnetParams{1500, 1},
+    SubnetParams{100,  1},
+    SubnetParams{50,   1},
+    SubnetParams{300,  1},
   }
+
+  for i:= 0; i < numberOfSubnets; i++ {
+    enterSubnetParams(&subnetParams[i], i)
+  }
+  sort.Sort(SubnetParamsSort(subnetParams))
+  
+  
+  
+  // subnets := make([]Subnet, 0)
+  
   
   fmt.Println(network)
-  fmt.Println(numOfSubnets)
+  fmt.Println(network.Mask)
+  fmt.Println(len(network.Mask))
+  fmt.Println(numberOfSubnets)
   fmt.Println(subnetParams)
+  // fmt.Println(subnets)
 }
