@@ -13,9 +13,11 @@ type Subnet struct {
 func main() {  
   fmt.Printf("Enter IPv4 network address in CIDR format (192.168.0.0/16): ")
   var networkAddress string
-	fmt.Scanln(&networkAddress)
-  if len(networkAddress) == 0 {
-    networkAddress = "192.168.0.0/16"
+	n, err := fmt.Scanln(&networkAddress)
+  if n == 0 {
+    networkAddress = "192.168.0.0/16" /* default class C */
+  } else if err != nil {
+    log.Fatal(fmt.Errorf("%s\n", err))
   }
   ip, net, err := net.ParseCIDR(networkAddress)
   if err != nil {
