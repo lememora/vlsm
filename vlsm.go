@@ -144,7 +144,7 @@ func AskForSubnetParams(p *SubnetParams, counter int) {
 }
 
 func CalcPoolSize(numberOfHosts uint32) uint32 {
-  hostBits := len(fmt.Sprintf("%b", numberOfHosts - 1))
+  hostBits := len(fmt.Sprintf("%b", numberOfHosts - 1)) // 0…numberOfHosts-1
   i, err := strconv.ParseInt(strings.Repeat("1", hostBits), 2, 32)
   if err != nil {
     log.Fatal(fmt.Errorf("%s\n", err))
@@ -188,8 +188,8 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
 func main() {
   /* Ask for parameters */
   
-  networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
   // networkParams := NetworkParams{} // empty
+  networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
 
   network := AskForNetwork(networkParams)  
   numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
