@@ -12,6 +12,7 @@ import (
   "strconv"
   "strings"
 	"encoding/binary"
+  "io/ioutil"
 )
 
 type NetworkParams struct {
@@ -30,6 +31,10 @@ type Subnet struct {
 type SubnetParams struct {
   size uint32
   type_ byte
+}
+
+type OutputParams struct {
+  fileName string
 }
 
 type SubnetParamsSort []SubnetParams
@@ -143,6 +148,22 @@ func AskForSubnetParams(p *SubnetParams, counter int) {
   }
 }
 
+func AskForOutputFileName(p OutputParams) {
+  if len(p.fileName) == 0 {
+    var arg string
+    argDefault := "output.txt"
+    fmt.Printf("Enter the output file name (%s): ", argDefault)
+    n, err := fmt.Scanln(&arg)
+    if n == 0 {
+      arg = argDefault
+    } else if err != nil {
+      log.Fatal(fmt.Errorf("%s\n", err))
+    }
+
+    p.fileName = arg
+  }
+}
+
 func CalcPoolSize(numberOfHosts uint32) uint32 {
   hostBits := len(fmt.Sprintf("%b", numberOfHosts - 1)) // 0…numberOfHosts-1
   i, err := strconv.ParseInt(strings.Repeat("1", hostBits), 2, 32)
@@ -206,12 +227,7 @@ func CalcVLSM(network *net.IPNet, subnetParams []SubnetParams) (subnets []Subnet
   for i:= 0; i < len(subnetParams); i++ {
     params := subnetParams[i]
     numberOfHosts := (params.size + 2) // +(network+broadcast)
-    // type_ := params.type_
-    // 
-    // // if(type_==61) {
-    // //   
-    // // }
-    
+
     subnet := CalcSubnet(*nextNetwork, numberOfHosts)
     valid = NetworkHasAddress(network, subnet.broadcast)
     if valid {
@@ -219,33 +235,41 @@ func CalcVLSM(network *net.IPNet, subnetParams []SubnetParams) (subnets []Subnet
       /* next available network after subnetting */
       nextNetwork.IP = CalcAddress(subnet.broadcast, 1)
       nextNetwork.Mask = CalcMask(subnet.network.Mask, numberOfHosts)
+
+      if(params.type_==61) { // balanced
+        
+        // testParams := subnetParams[i+1:]
+        // if len(testParams) > 1 {
+        //   testParams := make(SubnetParams, len(subnetParams) - 1)
+        //   testParams[0].size = CalcPoolSize(testParams[0].size) * 2 // factor of 2 higher than the minimum size
+        //   fmt.Printf("test params = %v\n", testParams[0].size)
+        //   // _, testVLSM := CalcVLSM(nextNetwork, testParams)
+        //   // fmt.Printf("tested network = %v with value = %v\n", subnet.network, testVLSM)          
+        // }
+      }
+
     }    
   }
   
   return subnets, valid
 }
 
+func SaveOutput(fileName string, content string) {
+  err := ioutil.WriteFile(fileName, []byte(content), 0644)
+  if err != nil {
+    log.Fatal(fmt.Errorf("Unable to save output"))
+  }
+}
+
 func main() {
   /* Ask for parameters */
   
-  // networkParams := NetworkParams{} // empty
-  // networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
-  networkParams := NetworkParams{"192.168.1.0/24", uint32(4)} // test
+  networkParams := NetworkParams{} // empty
 
   network := AskForNetwork(networkParams)
   numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
 
-  // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
-  subnetParams := []SubnetParams{ // test
-    // SubnetParams{113, 60},
-    // SubnetParams{97,  60},
-    // SubnetParams{61,  60},
-    // SubnetParams{29,  60},
-    SubnetParams{97, 60},
-    SubnetParams{61, 60},
-    SubnetParams{29, 60},
-    SubnetParams{13, 60},
-  }
+  subnetParams := make([]SubnetParams, numberOfSubnets) // empty
 
   for i:= 0; i < numberOfSubnets; i++ {
     AskForSubnetParams(&subnetParams[i], i)
@@ -260,15 +284,26 @@ func main() {
     log.Fatal(fmt.Errorf("Network not big enough"))
   }
 
-  /* Debug Subnets */
+  /* Write output to file */
+  
+  // outputParams := OutputParams{} // empty
+  outputParams := OutputParams{"output.txt"} // test
+  AskForOutputFileName(outputParams)
 
-  fmt.Println("===== DEBUG: SUBNETS =====")
+  content := fmt.Sprintf("Original network: %s\n\n", networkParams.networkAddress)
+  
   for i:= 0; i < len(subnets); i++ {
-    fmt.Printf("--- Subnet #%d ---\n", i)
-    fmt.Printf("\tnetwork = %v\n", subnets[i].network)
-    fmt.Printf("\tdotted mask = %s\n", subnets[i].dottedMask)
-    fmt.Printf("\tbroadcast = %v\n", subnets[i].broadcast)
-    fmt.Printf("\tpool size = %d\n", subnets[i].poolSize)
-    fmt.Printf("\tpool range = FROM: %v  TO: %v\n", subnets[i].poolRange[0], subnets[i].poolRange[1])
+    content += fmt.Sprintf("Subnet #%d:\n", i)
+    nMask, _ := subnets[i].network.Mask.Size()
+    content += fmt.Sprintf("\tNetwork address: %s/%d\n", subnets[i].network.IP, nMask)
+    content += fmt.Sprintf("\tSubnet mask: %s\n", subnets[i].dottedMask)
+    content += fmt.Sprintf("\tBroadcast address: %v\n", subnets[i].broadcast)
+    content += fmt.Sprintf("\tPool size: %d\n", subnets[i].poolSize)
+    content += fmt.Sprintf("\tPool range: %d\n", i)
+    content += fmt.Sprintf("\t\tFrom: %v\n", subnets[i].poolRange[0])
+    content += fmt.Sprintf("\t\tTo: %v\n", subnets[i].poolRange[1])
   }
+  
+  SaveOutput(outputParams.fileName, content)
+  fmt.Printf("Check out the output file: %s\n", outputParams.fileName)
 }
