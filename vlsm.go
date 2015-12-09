@@ -27,7 +27,7 @@ type Subnet struct {
 
 type SubnetParams struct {
   size uint32
-  distribution byte
+  type_ byte
 }
 
 type SubnetParamsSort []SubnetParams
@@ -110,13 +110,10 @@ func enterSubnetSize(p *SubnetParams) {
   p.size = uint32(n)
 }
 
-func enterSubnetDistribution(p *SubnetParams) {
-  // options := map[byte]string {60: "minimum", 61: "balanced", 62: "maximum"}
-  // optionKeys := make([]int, 0, len(options))
-  // // contains(options, arg)
+func enterSubnetType(p *SubnetParams) {
   var arg string
   argDefault := "<"
-  fmt.Printf("Enter subnet distribution [<|=|>] (%s): ", argDefault)
+  fmt.Printf("Enter subnet type minimum|balanced|maximum [<|=|>] (%s): ", argDefault)
   n, err := fmt.Scanln(&arg)
 
   if n == 0 {
@@ -125,7 +122,7 @@ func enterSubnetDistribution(p *SubnetParams) {
     log.Fatal(fmt.Errorf("%s\n", err))
   }
 
-  p.distribution = byte(arg[0])
+  p.type_ = byte(arg[0])
 }
 
 func enterSubnetParams(p *SubnetParams, counter int) {
@@ -136,11 +133,11 @@ func enterSubnetParams(p *SubnetParams, counter int) {
   if !(p.size >= 1 && p.size <= 2147483646) {
     log.Fatal(fmt.Errorf("Invalid subnet size = %d", p.size))
   }
-  if p.distribution == 0 {
-    enterSubnetDistribution(p)    
+  if p.type_ == 0 {
+    enterSubnetType(p)    
   }
-  if !(p.distribution >= 60 && p.distribution <= 62) {
-    log.Fatal(fmt.Errorf("Invalid subnet distribution = %d", p.distribution))
+  if !(p.type_ >= 60 && p.type_ <= 62) {
+    log.Fatal(fmt.Errorf("Invalid subnet type_ = %d", p.type_))
   }
 }
 
