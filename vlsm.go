@@ -152,35 +152,46 @@ func CalcPoolSize(numberOfHosts uint32) uint32 {
   return uint32(i) - 2
 }
 
-func IncrementIPv4(ip net.IP, inc uint32) net.IP {
-  n := binary.BigEndian.Uint32(ip.To4()) + inc
+func CalcAddress(ip net.IP, numberOfHosts uint32) net.IP {
+  n := binary.BigEndian.Uint32(ip.To4()) + numberOfHosts
   return net.IPv4(byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+}
+
+func CalcMask(mask net.IPMask, numberOfHosts uint32) net.IPMask {
+  ones, bits := mask.Size()
+  availableHostBits := bits - ones
+  hostBitsNeeded := len(fmt.Sprintf("%b", numberOfHosts))
+  networkBits := availableHostBits - hostBitsNeeded
+
+  if networkBits < 0 {
+    log.Fatal(fmt.Errorf("Network not big enough"))
+  }
+  
+  return net.CIDRMask(ones + networkBits, 32)
 }
 
 func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   subnet := Subnet{}
 
   subnet.network = network
-  m := network.Mask
+  subnet.network.Mask = CalcMask(network.Mask, numberOfHosts)
+  m := subnet.network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize + 2)
-  subnet.poolRange[0] = IncrementIPv4(network.IP, 1)
-  subnet.poolRange[1] = IncrementIPv4(network.IP, subnet.poolSize)
+  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 2)
+  subnet.poolRange[0] = CalcAddress(network.IP, 1)
+  subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize)
 
   return &subnet
 }
 
 func main() {
+  /* Ask for parameters */
+  
   networkParams := NetworkParams{"172.16.0.0/16", uint32(5)} // test
   // networkParams := NetworkParams{} // empty
 
-  network := AskForNetwork(networkParams)
-  
-  /* Calculate number of host bits available for the given network */
-  // ones, bits := network.Mask.Size()
-  // availableHostBits := bits - ones
-
+  network := AskForNetwork(networkParams)  
   numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
@@ -197,13 +208,8 @@ func main() {
   }
   sort.Sort(SubnetParamsSort(subnetParams))
 
-  // /* Calculate number of host bits necessary based on the biggest subnet */
-  // requiredHostBits := int(math.Ceil(math.Log2(float64(subnetParams[0].size))))
-  // availableSubnetBits := availableHostBits - requiredHostBits
-  // if availableSubnetBits < 0 {
-  //   log.Fatal(fmt.Errorf("Network not big enough"))
-  // }
-  
+  /* Calculate Subnets */
+
   subnets := []Subnet{}
   nextNetwork := network
   
@@ -212,8 +218,13 @@ func main() {
     numberOfHosts := (params.size + 2) // +(network+broadcast)
     subnet := CalcSubnet(*nextNetwork, numberOfHosts)
     subnets = append(subnets, *subnet)
-    nextNetwork.IP = IncrementIPv4(subnet.broadcast, 1)
+    
+    /* next available network after subnetting */
+    nextNetwork.IP = CalcAddress(subnet.broadcast, 1)
+    nextNetwork.Mask = CalcMask(subnet.network.Mask, numberOfHosts)
   }
+
+  /* Debug Subnets */
 
   fmt.Println("===== DEBUG: SUBNETS =====")
   for i:= 0; i < numberOfSubnets; i++ {
