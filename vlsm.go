@@ -6,7 +6,7 @@ package main
 import (
   "fmt"
   "log"
-  // "math"
+  "math"
   "net"
   "sort"
   "strconv"
@@ -178,28 +178,46 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   m := subnet.network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 1) // wrong
+  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 1)
   subnet.poolRange[0] = CalcAddress(network.IP, 1)
   subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize)
 
   return &subnet
 }
 
+func CalcBoundary(network *net.IPNet) net.IP {
+  mask := network.Mask
+  ones, bits := mask.Size()
+  return CalcAddress(network.IP, uint32(math.Pow(2, float64(bits - ones))) - 1)
+}
+
+func NetworkHasAddress(network *net.IPNet, address net.IP) bool {
+  boundary := CalcBoundary(network)
+  boundaryInt := binary.BigEndian.Uint32(boundary.To4())
+  addressInt := binary.BigEndian.Uint32(address.To4())
+  return addressInt <= boundaryInt
+}
+
 func main() {
   /* Ask for parameters */
   
   // networkParams := NetworkParams{} // empty
-  networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
+  // networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
+  networkParams := NetworkParams{"192.168.1.0/24", uint32(4)} // test
 
-  network := AskForNetwork(networkParams)  
+  network := AskForNetwork(networkParams)
   numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
   subnetParams := []SubnetParams{ // test
-    SubnetParams{50, 60},
-    SubnetParams{25, 60},
-    SubnetParams{10, 60},
-    SubnetParams{2,  60},
+    // SubnetParams{113, 60},
+    // SubnetParams{97,  60},
+    // SubnetParams{61,  60},
+    // SubnetParams{29,  60},
+    SubnetParams{97, 60},
+    SubnetParams{61, 60},
+    SubnetParams{29, 60},
+    SubnetParams{13, 60},
   }
 
   for i:= 0; i < numberOfSubnets; i++ {
@@ -210,13 +228,17 @@ func main() {
   /* Calculate Subnets */
 
   subnets := []Subnet{}
-  nextNetwork := network
+  nextNetwork := &net.IPNet{IP: network.IP, Mask: network.Mask}
   
   for i:= 0; i < numberOfSubnets; i++ {
     params := subnetParams[i]
     numberOfHosts := (params.size + 2) // +(network+broadcast)
     subnet := CalcSubnet(*nextNetwork, numberOfHosts)
     subnets = append(subnets, *subnet)
+
+    if !NetworkHasAddress(network, subnet.broadcast) {
+      log.Fatal(fmt.Errorf("Network not big enough"))
+    }
     
     /* next available network after subnetting */
     nextNetwork.IP = CalcAddress(subnet.broadcast, 1)
