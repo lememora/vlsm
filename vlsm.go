@@ -178,9 +178,9 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   m := subnet.network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 1)
+  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 1) // wrong
   subnet.poolRange[0] = CalcAddress(network.IP, 1)
-  subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize - 1)
+  subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize)
 
   return &subnet
 }
@@ -188,7 +188,7 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
 func main() {
   /* Ask for parameters */
   
-  networkParams := NetworkParams{"172.16.0.0/16", uint32(5)} // test
+  networkParams := NetworkParams{"172.16.0.0/16", uint32(4)} // test
   // networkParams := NetworkParams{} // empty
 
   network := AskForNetwork(networkParams)  
@@ -196,11 +196,10 @@ func main() {
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
   subnetParams := []SubnetParams{ // test
-    SubnetParams{50,  60},
-    SubnetParams{150, 60},
-    SubnetParams{10,  60},
-    SubnetParams{5,   60},
-    SubnetParams{30,  60},
+    SubnetParams{50, 60},
+    SubnetParams{25, 60},
+    SubnetParams{10, 60},
+    SubnetParams{2,  60},
   }
 
   for i:= 0; i < numberOfSubnets; i++ {
