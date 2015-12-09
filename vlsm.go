@@ -198,6 +198,33 @@ func NetworkHasAddress(network *net.IPNet, address net.IP) bool {
   return addressInt <= boundaryInt
 }
 
+func CalcVLSM(network *net.IPNet, subnetParams []SubnetParams) (subnets []Subnet, valid bool) {
+  subnets = []Subnet{}
+  valid = true
+  nextNetwork := &net.IPNet{IP: network.IP, Mask: network.Mask}
+  
+  for i:= 0; i < len(subnetParams); i++ {
+    params := subnetParams[i]
+    numberOfHosts := (params.size + 2) // +(network+broadcast)
+    // type_ := params.type_
+    // 
+    // // if(type_==61) {
+    // //   
+    // // }
+    
+    subnet := CalcSubnet(*nextNetwork, numberOfHosts)
+    valid = NetworkHasAddress(network, subnet.broadcast)
+    if valid {
+      subnets = append(subnets, *subnet)
+      /* next available network after subnetting */
+      nextNetwork.IP = CalcAddress(subnet.broadcast, 1)
+      nextNetwork.Mask = CalcMask(subnet.network.Mask, numberOfHosts)
+    }    
+  }
+  
+  return subnets, valid
+}
+
 func main() {
   /* Ask for parameters */
   
@@ -227,28 +254,16 @@ func main() {
 
   /* Calculate Subnets */
 
-  subnets := []Subnet{}
-  nextNetwork := &net.IPNet{IP: network.IP, Mask: network.Mask}
+  subnets, valid := CalcVLSM(network, subnetParams)
   
-  for i:= 0; i < numberOfSubnets; i++ {
-    params := subnetParams[i]
-    numberOfHosts := (params.size + 2) // +(network+broadcast)
-    subnet := CalcSubnet(*nextNetwork, numberOfHosts)
-    subnets = append(subnets, *subnet)
-
-    if !NetworkHasAddress(network, subnet.broadcast) {
-      log.Fatal(fmt.Errorf("Network not big enough"))
-    }
-    
-    /* next available network after subnetting */
-    nextNetwork.IP = CalcAddress(subnet.broadcast, 1)
-    nextNetwork.Mask = CalcMask(subnet.network.Mask, numberOfHosts)
+  if !valid {
+    log.Fatal(fmt.Errorf("Network not big enough"))
   }
 
   /* Debug Subnets */
 
   fmt.Println("===== DEBUG: SUBNETS =====")
-  for i:= 0; i < numberOfSubnets; i++ {
+  for i:= 0; i < len(subnets); i++ {
     fmt.Printf("--- Subnet #%d ---\n", i)
     fmt.Printf("\tnetwork = %v\n", subnets[i].network)
     fmt.Printf("\tdotted mask = %s\n", subnets[i].dottedMask)
