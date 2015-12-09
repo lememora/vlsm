@@ -6,10 +6,12 @@ package main
 import (
   "fmt"
   "log"
-  "math"
+  // "math"
   "net"
   "sort"
   "strconv"
+  "strings"
+	"encoding/binary"
 )
 
 type NetworkParams struct {
@@ -19,7 +21,7 @@ type NetworkParams struct {
 
 type Subnet struct {
   network net.IPNet
-  mask net.IP
+  dottedMask string
   broadcast net.IP
   poolSize uint32
   poolRange [2]net.IP
@@ -44,7 +46,7 @@ func (s SubnetParamsSort) Less(i, j int) bool {
   return s[i].size > s[j].size
 }
 
-func enterNetwork(p NetworkParams) *net.IPNet {
+func AskForNetwork(p NetworkParams) *net.IPNet {
   if len(p.networkAddress) == 0 {
     argDefault := "10.0.0.0/8"
     fmt.Printf("Enter IPv4 network address in CIDR format (%s): ", argDefault)
@@ -64,7 +66,7 @@ func enterNetwork(p NetworkParams) *net.IPNet {
   return net
 }
 
-func enterNumberOfSubnets(p NetworkParams) uint32 {
+func AskForNumberOfSubnets(p NetworkParams) uint32 {
   if p.numberOfSubnets == 0 {
     var arg string
     argDefault := "1"
@@ -91,7 +93,7 @@ func enterNumberOfSubnets(p NetworkParams) uint32 {
   return p.numberOfSubnets
 }
 
-func enterSubnetSize(p *SubnetParams) {
+func AskForSubnetSize(p *SubnetParams) {
   var arg string
   argDefault := "2"
   fmt.Printf("Enter subnet size (%s): ", argDefault)
@@ -110,7 +112,7 @@ func enterSubnetSize(p *SubnetParams) {
   p.size = uint32(n)
 }
 
-func enterSubnetType(p *SubnetParams) {
+func AskForSubnetType(p *SubnetParams) {
   var arg string
   argDefault := "<"
   fmt.Printf("Enter subnet type minimum|balanced|maximum [<|=|>] (%s): ", argDefault)
@@ -125,33 +127,61 @@ func enterSubnetType(p *SubnetParams) {
   p.type_ = byte(arg[0])
 }
 
-func enterSubnetParams(p *SubnetParams, counter int) {
+func AskForSubnetParams(p *SubnetParams, counter int) {
   if p.size == 0 {
     fmt.Printf("=== Subnet #%d ===\n", counter + 1)
-    enterSubnetSize(p)    
+    AskForSubnetSize(p)    
   }
   if !(p.size >= 1 && p.size <= 2147483646) {
     log.Fatal(fmt.Errorf("Invalid subnet size = %d", p.size))
   }
   if p.type_ == 0 {
-    enterSubnetType(p)    
+    AskForSubnetType(p)    
   }
   if !(p.type_ >= 60 && p.type_ <= 62) {
     log.Fatal(fmt.Errorf("Invalid subnet type_ = %d", p.type_))
   }
 }
 
+func CalcPoolSize(numberOfHosts uint32) uint32 {
+  hostBits := len(fmt.Sprintf("%b", numberOfHosts))
+  i, err := strconv.ParseInt(strings.Repeat("1", hostBits), 2, 32)
+  if err != nil {
+    log.Fatal(fmt.Errorf("%s\n", err))
+  }
+  return uint32(i)
+}
+
+func IncrementIPv4(ip net.IP, inc uint32) net.IP {
+  n := binary.BigEndian.Uint32(ip.To4()) + inc
+  return net.IPv4(byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+}
+
+func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
+  subnet := Subnet{}
+
+  subnet.network = network
+  m := network.Mask
+  subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
+  subnet.poolSize = CalcPoolSize(numberOfHosts)
+  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize)
+  subnet.poolRange[0] = network.IP
+  subnet.poolRange[1] = IncrementIPv4(network.IP, subnet.poolSize - 1)
+
+  return &subnet
+}
+
 func main() {
-  networkParams := NetworkParams{"192.168.1.0/24", uint32(5)} // test
+  networkParams := NetworkParams{"172.16.0.0/16", uint32(5)} // test
   // networkParams := NetworkParams{} // empty
 
-  network := enterNetwork(networkParams)
+  network := AskForNetwork(networkParams)
   
   /* Calculate number of host bits available for the given network */
   ones, bits := network.Mask.Size()
   availableHostBits := bits - ones
 
-  numberOfSubnets := int(enterNumberOfSubnets(networkParams))
+  numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
   subnetParams := []SubnetParams{ // test
@@ -163,27 +193,37 @@ func main() {
   }
 
   for i:= 0; i < numberOfSubnets; i++ {
-    enterSubnetParams(&subnetParams[i], i)
+    AskForSubnetParams(&subnetParams[i], i)
   }
   sort.Sort(SubnetParamsSort(subnetParams))
 
-  /* Calculate number of host bits necessary based on the biggest subnet */
-  requiredHostBits := int(math.Ceil(math.Log2(float64(subnetParams[0].size))))
-  availableSubnetBits := availableHostBits - requiredHostBits
-  if availableSubnetBits < 0 {
-    log.Fatal(fmt.Errorf("Network not big enough"))
-  }
+  // /* Calculate number of host bits necessary based on the biggest subnet */
+  // requiredHostBits := int(math.Ceil(math.Log2(float64(subnetParams[0].size))))
+  // availableSubnetBits := availableHostBits - requiredHostBits
+  // if availableSubnetBits < 0 {
+  //   log.Fatal(fmt.Errorf("Network not big enough"))
+  // }
   
-  // subnets := make([]Subnet, 0)
+  subnets := []Subnet{}
   
+  // ------
   
+  params := subnetParams[0]
+  numberOfHosts := params.size
+
+  subnet := CalcSubnet(*network, numberOfHosts)
+  subnets = append(subnets, *subnet)
+
+  fmt.Printf("DEBUG: first subnet = %v\n", subnets[0])
+    
   fmt.Println("=== DEBUG >>>")
   fmt.Printf("network = %v\n", network)
   fmt.Printf("network.Mask = %v\n", network.Mask)
   fmt.Printf("availableHostBits = %v\n", availableHostBits)
   fmt.Printf("numberOfSubnets = %v\n", numberOfSubnets)
+  fmt.Printf("subnets = %v\n", subnets)
   fmt.Printf("subnetParams = %v\n", subnetParams)
-  fmt.Printf("requiredHostBits = %v\n", requiredHostBits)
+  // fmt.Printf("requiredHostBits = %v\n", requiredHostBits)
   fmt.Println("<<< DEBUG ===")
   // fmt.Println(subnets)
 }
