@@ -149,7 +149,7 @@ func CalcPoolSize(numberOfHosts uint32) uint32 {
   if err != nil {
     log.Fatal(fmt.Errorf("%s\n", err))
   }
-  return uint32(i)
+  return uint32(i) + 1
 }
 
 func IncrementIPv4(ip net.IP, inc uint32) net.IP {
@@ -164,9 +164,9 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   m := network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize)
+  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize - 1)
   subnet.poolRange[0] = network.IP
-  subnet.poolRange[1] = IncrementIPv4(network.IP, subnet.poolSize - 1)
+  subnet.poolRange[1] = subnet.broadcast
 
   return &subnet
 }
@@ -178,8 +178,8 @@ func main() {
   network := AskForNetwork(networkParams)
   
   /* Calculate number of host bits available for the given network */
-  ones, bits := network.Mask.Size()
-  availableHostBits := bits - ones
+  // ones, bits := network.Mask.Size()
+  // availableHostBits := bits - ones
 
   numberOfSubnets := int(AskForNumberOfSubnets(networkParams))
 
@@ -205,25 +205,23 @@ func main() {
   // }
   
   subnets := []Subnet{}
+  nextNetwork := network
   
-  // ------
-  
-  params := subnetParams[0]
-  numberOfHosts := params.size
+  for i:= 0; i < numberOfSubnets; i++ {
+    params := subnetParams[i]
+    numberOfHosts := params.size
+    subnet := CalcSubnet(*nextNetwork, numberOfHosts)
+    subnets = append(subnets, *subnet)
+    nextNetwork.IP = IncrementIPv4(subnet.broadcast, 1)
+  }
 
-  subnet := CalcSubnet(*network, numberOfHosts)
-  subnets = append(subnets, *subnet)
-
-  fmt.Printf("DEBUG: first subnet = %v\n", subnets[0])
-    
-  fmt.Println("=== DEBUG >>>")
-  fmt.Printf("network = %v\n", network)
-  fmt.Printf("network.Mask = %v\n", network.Mask)
-  fmt.Printf("availableHostBits = %v\n", availableHostBits)
-  fmt.Printf("numberOfSubnets = %v\n", numberOfSubnets)
-  fmt.Printf("subnets = %v\n", subnets)
-  fmt.Printf("subnetParams = %v\n", subnetParams)
-  // fmt.Printf("requiredHostBits = %v\n", requiredHostBits)
-  fmt.Println("<<< DEBUG ===")
-  // fmt.Println(subnets)
+  fmt.Println("===== DEBUG: SUBNETS =====")
+  for i:= 0; i < numberOfSubnets; i++ {
+    fmt.Printf("--- Subnet #%d ---\n", i)
+    fmt.Printf("\tnetwork = %v\n", subnets[i].network)
+    fmt.Printf("\tdotted mask = %s\n", subnets[i].dottedMask)
+    fmt.Printf("\tbroadcast = %v\n", subnets[i].broadcast)
+    fmt.Printf("\tpool size = %d\n", subnets[i].poolSize)
+    fmt.Printf("\tpool range = FROM: %v  TO: %v\n", subnets[i].poolRange[0], subnets[i].poolRange[1])
+  }
 }
