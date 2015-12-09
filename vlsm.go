@@ -144,12 +144,12 @@ func AskForSubnetParams(p *SubnetParams, counter int) {
 }
 
 func CalcPoolSize(numberOfHosts uint32) uint32 {
-  hostBits := len(fmt.Sprintf("%b", numberOfHosts))
+  hostBits := len(fmt.Sprintf("%b", numberOfHosts - 1))
   i, err := strconv.ParseInt(strings.Repeat("1", hostBits), 2, 32)
   if err != nil {
     log.Fatal(fmt.Errorf("%s\n", err))
   }
-  return uint32(i) - 2
+  return uint32(i) - 1
 }
 
 func CalcAddress(ip net.IP, numberOfHosts uint32) net.IP {
@@ -178,9 +178,9 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   m := subnet.network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 2)
+  subnet.broadcast = CalcAddress(network.IP, subnet.poolSize + 1)
   subnet.poolRange[0] = CalcAddress(network.IP, 1)
-  subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize)
+  subnet.poolRange[1] = CalcAddress(network.IP, subnet.poolSize - 1)
 
   return &subnet
 }
