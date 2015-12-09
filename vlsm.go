@@ -46,9 +46,9 @@ func (s SubnetParamsSort) Less(i, j int) bool {
 
 func enterNetwork(p NetworkParams) *net.IPNet {
   if len(p.networkAddress) == 0 {
-    argDefault := "192.168.0.0/16" /* default class C */
+    argDefault := "10.0.0.0/8"
     fmt.Printf("Enter IPv4 network address in CIDR format (%s): ", argDefault)
-  	n, err := fmt.Scanln(&p.networkAddress)
+    n, err := fmt.Scanln(&p.networkAddress)
     if n == 0 {
       p.networkAddress = argDefault
     } else if err != nil {
@@ -111,19 +111,21 @@ func enterSubnetSize(p *SubnetParams) {
 }
 
 func enterSubnetDistribution(p *SubnetParams) {
-  p.distribution = byte(1) /* stub */
-  // TODO: parse distribution
-  // // distributionChoices := [3]string {"minimum","maximum","balanced"}
-  // // contains(distributionChoices, arg)
-  // var arg string
-  // argDefault := "minimum"
-  // fmt.Printf("Enter subnet distribution [minimum|maximum|balanced] (%s): ", argDefault)
-  // n, err := fmt.Scanln(&arg)
-  // if n == 0 {
-  //   arg = argDefault
-  // } else if err != nil {
-  //   log.Fatal(fmt.Errorf("%s\n", err))
-  // }
+  // options := map[byte]string {60: "minimum", 61: "balanced", 62: "maximum"}
+  // optionKeys := make([]int, 0, len(options))
+  // // contains(options, arg)
+  var arg string
+  argDefault := "<"
+  fmt.Printf("Enter subnet distribution [<|=|>] (%s): ", argDefault)
+  n, err := fmt.Scanln(&arg)
+
+  if n == 0 {
+    arg = argDefault
+  } else if err != nil {
+    log.Fatal(fmt.Errorf("%s\n", err))
+  }
+
+  p.distribution = byte(arg[0])
 }
 
 func enterSubnetParams(p *SubnetParams, counter int) {
@@ -137,7 +139,7 @@ func enterSubnetParams(p *SubnetParams, counter int) {
   if p.distribution == 0 {
     enterSubnetDistribution(p)    
   }
-  if !(p.distribution >= 1 && p.distribution <= 3) {
+  if !(p.distribution >= 60 && p.distribution <= 62) {
     log.Fatal(fmt.Errorf("Invalid subnet distribution = %d", p.distribution))
   }
 }
@@ -156,11 +158,11 @@ func main() {
 
   // subnetParams := make([]SubnetParams, numberOfSubnets) // empty
   subnetParams := []SubnetParams{ // test
-    SubnetParams{50,  1},
-    SubnetParams{150, 1},
-    SubnetParams{10,  1},
-    SubnetParams{5,   1},
-    SubnetParams{30,  1},
+    SubnetParams{50,  60},
+    SubnetParams{150, 60},
+    SubnetParams{10,  60},
+    SubnetParams{5,   60},
+    SubnetParams{30,  60},
   }
 
   for i:= 0; i < numberOfSubnets; i++ {
