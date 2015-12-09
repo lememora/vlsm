@@ -95,8 +95,8 @@ func AskForNumberOfSubnets(p NetworkParams) uint32 {
 
 func AskForSubnetSize(p *SubnetParams) {
   var arg string
-  argDefault := "2"
-  fmt.Printf("Enter subnet size (%s): ", argDefault)
+  argDefault := "1"
+  fmt.Printf("Enter subnet size or “number of assignable addresses” (%s): ", argDefault)
   n, err := fmt.Scanln(&arg)
   if n == 0 {
     arg = argDefault
@@ -149,7 +149,7 @@ func CalcPoolSize(numberOfHosts uint32) uint32 {
   if err != nil {
     log.Fatal(fmt.Errorf("%s\n", err))
   }
-  return uint32(i) + 1
+  return uint32(i) - 2
 }
 
 func IncrementIPv4(ip net.IP, inc uint32) net.IP {
@@ -164,9 +164,9 @@ func CalcSubnet(network net.IPNet, numberOfHosts uint32) *Subnet {
   m := network.Mask
   subnet.dottedMask = fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
   subnet.poolSize = CalcPoolSize(numberOfHosts)
-  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize - 1)
-  subnet.poolRange[0] = network.IP
-  subnet.poolRange[1] = subnet.broadcast
+  subnet.broadcast = IncrementIPv4(network.IP, subnet.poolSize + 2)
+  subnet.poolRange[0] = IncrementIPv4(network.IP, 1)
+  subnet.poolRange[1] = IncrementIPv4(network.IP, subnet.poolSize)
 
   return &subnet
 }
@@ -209,7 +209,7 @@ func main() {
   
   for i:= 0; i < numberOfSubnets; i++ {
     params := subnetParams[i]
-    numberOfHosts := params.size
+    numberOfHosts := (params.size + 2) // +(network+broadcast)
     subnet := CalcSubnet(*nextNetwork, numberOfHosts)
     subnets = append(subnets, *subnet)
     nextNetwork.IP = IncrementIPv4(subnet.broadcast, 1)
