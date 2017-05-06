@@ -11,7 +11,7 @@ import (
   "sort"
   "strconv"
   "strings"
-	"encoding/binary"
+  "encoding/binary"
   "io/ioutil"
 )
 
